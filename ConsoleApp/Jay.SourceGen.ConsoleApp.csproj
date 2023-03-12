@@ -10,6 +10,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="IndexRange" Version="1.0.2" />
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4">
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
@@ -24,21 +25,20 @@
 
     <!-- Other Projects -->
     <ItemGroup>
-         <ProjectReference Include="..\Core\Core.csproj" PrivateAssets="all"/>
+         <ProjectReference Include="..\Core\Jay.SourceGen.csproj" 
+                            OutputItemType="Analyzer" 
+                           ReferenceOutputAssembly="true" 
+                           PrivateAssets="all" />
     </ItemGroup>
     
     <!-- Attribute Projects -->
     <ItemGroup>
-        <ProjectReference Include="..\EntityGen.Attributes\EntityGen.Attributes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
         <ProjectReference Include="..\EnumGen.Attributes\EnumGen.Attributes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
-        <ProjectReference Include="..\InterfaceGen.Attributes\InterfaceGen.Attributes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
     </ItemGroup>
 
     <!-- Source Generator Projects-->
     <ItemGroup>
-        <ProjectReference Include="..\EntityGen\EntityGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\EnumGen\EnumGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-        <ProjectReference Include="..\InterfaceGen\InterfaceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
 </Project>

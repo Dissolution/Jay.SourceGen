@@ -82,7 +82,7 @@ public static class EnumerableExtensions
     {
         if (string.IsNullOrEmpty(delimiter))
             return Enumerate<T>(codeBuilder, values, perValueAction);
-        return Delimit<T>(codeBuilder, b => b.Format(delimiter), values, perValueAction);
+        return Delimit<T>(codeBuilder, b => b.Value(delimiter), values, perValueAction);
     }
 
 

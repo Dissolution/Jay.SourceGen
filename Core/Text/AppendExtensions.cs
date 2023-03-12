@@ -21,6 +21,7 @@ public static class AppendExtensions
         return codeBuilder;
     }
 
+    /*
     public static CodeBuilder Append<T>(this CodeBuilder codeBuilder, T? value)
     {
         string? str;
@@ -61,8 +62,9 @@ public static class AppendExtensions
 
         return codeBuilder;
     }
+    */
 
-    public static CodeBuilder AppendLine(this CodeBuilder codeBuilder) 
+    public static CodeBuilder AppendLine(this CodeBuilder codeBuilder)
         => Append(codeBuilder, "\r\n");
 
     public static CodeBuilder AppendLine(this CodeBuilder codeBuilder, char ch)
@@ -74,10 +76,12 @@ public static class AppendExtensions
     public static CodeBuilder AppendLine(this CodeBuilder codeBuilder, scoped ReadOnlySpan<char> text)
         => codeBuilder.Append(text).AppendLine();
 
+    /*
     public static CodeBuilder AppendLine<T>(this CodeBuilder codeBuilder, T? value)
         => codeBuilder.Append<T>(value).AppendLine();
 
     public static CodeBuilder AppendLine<T>(this CodeBuilder codeBuilder, T? value,
         string? format, IFormatProvider? provider = default)
         => codeBuilder.Append<T>(value, format, provider).AppendLine();
+    */
 }

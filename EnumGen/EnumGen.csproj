@@ -22,13 +22,27 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="IndexRange" Version="1.0.2" />
+        <PackageReference Include="IndexRange" Version="1.0.2">
+            <GeneratePathProperty>true</GeneratePathProperty>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
         <PackageReference Include="PolySharp" Version="1.12.1">
+            <GeneratePathProperty>true</GeneratePathProperty>
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
 
+    <PropertyGroup>
+        <GetTargetPathDependsOn>$(GetTargetPathDependsOn);GetDependencyTargetPaths</GetTargetPathDependsOn>
+    </PropertyGroup>
+
+    <Target Name="GetDependencyTargetPaths">
+    <ItemGroup>
+      <TargetPathWithTargetPlatformMoniker Include="$(PKGIndexRange)\lib\netstandard2.0\IndexRange.dll" IncludeRuntimeDependency="false" />
+    </ItemGroup>
+  </Target>
+    
     <!-- The following libraries include the source generator interfaces and types we need -->
     <ItemGroup>
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4">
@@ -43,10 +57,17 @@
     <!-- This ensures the library will be packaged as a source generator when we use `dotnet pack` -->
     <ItemGroup>
         <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+
+        <!-- Pack the attributes dll in the analyzers/dotnet/cs path -->
+        <None Include="$(OutputPath)\Jay.SourceGen.EnumGen.Attributes.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+
+        <!-- Pack the attributes dll in the lib\netstandard2.0 path -->
+        <None Include="$(OutputPath)\Jay.SourceGen.EnumGen.Attributes.dll" Pack="true" PackagePath="lib\netstandard2.0" Visible="true" />
+
     </ItemGroup>
-    
+
     <ItemGroup>
-        <ProjectReference Include="..\Core\Core.csproj" PrivateAssets="all" />
+        <ProjectReference Include="..\Core\Jay.SourceGen.csproj" GeneratePathProperty="true" PrivateAssets="all" />
         <ProjectReference Include="..\EnumGen.Attributes\EnumGen.Attributes.csproj" PrivateAssets="all" />
     </ItemGroup>
 </Project>

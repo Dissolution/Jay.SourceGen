@@ -1,10 +1,10 @@
 ﻿using Jay.SourceGen.EnumGen.Attributes;
-using Microsoft.CodeAnalysis.CSharp;
 using System.Diagnostics;
 
 
-TestEnum testEnum = default;
+TestEnum none = TestEnum.Alpha;
 
+string? str = none.ToString();
 
 Debugger.Break();
 
@@ -15,5 +15,7 @@ Console.ReadLine();
 [Enum]
 public readonly struct TestEnum
 {
-    public static readonly TestEnum None = default;
+    public static readonly TestEnum None = new();
+    public static readonly TestEnum Alpha = new();
+    public static readonly TestEnum Beta = new();
 }

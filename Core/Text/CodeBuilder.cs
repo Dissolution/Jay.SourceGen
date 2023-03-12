@@ -167,7 +167,7 @@ public sealed class CodeBuilder : IDisposable
     }
     #endregion
 
-    protected void WriteFormatLine(ReadOnlySpan<char> format, object?[] args)
+    private void WriteFormatLine(ReadOnlySpan<char> format, object?[] args)
     {
         // Undocumented exclusive limits on the range for Argument Hole Index
         const int IndexLimit = 1_000_000; // Note:            0 <= ArgIndex < IndexLimit
@@ -191,12 +191,12 @@ public sealed class CodeBuilder : IDisposable
                 int countUntilNextBrace = remainder.IndexOfAny('{', '}');
                 if (countUntilNextBrace < 0)
                 {
-                    this.Write(remainder);
+                    this.Append(remainder);
                     return;
                 }
 
                 // Append the text until the brace.
-                this.Write(remainder.Slice(0, countUntilNextBrace));
+                this.Append(remainder.Slice(0, countUntilNextBrace));
                 pos += countUntilNextBrace;
 
                 // Get the brace.
@@ -206,7 +206,7 @@ public sealed class CodeBuilder : IDisposable
                 ch = moveNext(format, ref pos);
                 if (brace == ch)
                 {
-                    this.Write(ch);
+                    this.Append(ch);
                     pos++;
                     continue;
                 }
@@ -315,7 +315,7 @@ public sealed class CodeBuilder : IDisposable
             object? arg = args[index];
 
             // Append this arg, allows for overridden behavior
-            this.Format<object?>(arg, itemFormat);
+            this.Value<object?>(arg, itemFormat);
 
             // Continue parsing the rest of the format string.
         }
@@ -376,11 +376,10 @@ public sealed class CodeBuilder : IDisposable
 
     public CodeBuilder NewLine()
     {
-        TextHelper.CopyTo(DefaultNewLine, Allocate(DefaultNewLine.Length));
-        return this;
+        return this.Append(_newLineIndent);
     }
 
-    public CodeBuilder Format<T>(
+    public CodeBuilder Value<T>(
        [AllowNull] T value,
        string? format = default,
        IFormatProvider? provider = default
@@ -394,6 +393,7 @@ public sealed class CodeBuilder : IDisposable
             }
             case CBA cba:
             {
+                // Indent-aware
                 var oldIndent = _newLineIndent;
                 var currentIndent = this.CurrentNewLineIndent();
                 _newLineIndent = currentIndent;
@@ -401,16 +401,13 @@ public sealed class CodeBuilder : IDisposable
                 _newLineIndent = oldIndent;
                 return this;
             }
-
             case string str:
             {
-                this.Write(str);
-                return this;
+                return this.Append(str);;
             }
             case IFormattable formattable:
             {
-                this.Write(formattable.ToString(format, provider));
-                return this;
+                return this.Append(formattable.ToString(format, provider));
             }
             case IEnumerable enumerable:
             {
@@ -418,13 +415,12 @@ public sealed class CodeBuilder : IDisposable
                 return this.Delimit(
                     format,
                     enumerable.Cast<object?>(),
-                    (w, v) => w.Format<object?>(v, default, provider)
+                    (w, v) => w.Value<object?>(v, default, provider)
                 );
             }
             default:
             {
-                this.Write<T>(value);
-                return this;
+                return this.Append(value.ToString());
             }
         }
     }
@@ -437,7 +433,7 @@ public sealed class CodeBuilder : IDisposable
         {
             if (e.Index > 0)
                 NewLine();
-            this.Write(e.Current);
+            this.Append(e.Current);
         }
         return this;
     }
@@ -466,7 +462,7 @@ public sealed class CodeBuilder : IDisposable
         // We might be on a new line, but not yet indented
         if (this.CurrentNewLineIndent() == oldIndent)
         {
-            this.Write(indent);
+            this.Append(indent);
         }
 
         var newIndent = oldIndent + indent;
@@ -477,7 +473,7 @@ public sealed class CodeBuilder : IDisposable
         if (Written.EndsWith(newIndent.AsSpan()))
         {
             this.Length -= newIndent.Length;
-            this.Write(oldIndent);
+            this.Append(oldIndent);
         }
         return this;
     }
