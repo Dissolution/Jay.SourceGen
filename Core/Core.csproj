@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <!-- 👇 Source generators must target netstandard 2.0 -->
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <!-- Use the latest + greatest features -->
+        <LangVersion>11.0</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>true</ImplicitUsings>
+        <AssemblyName>Jay.SourceGen</AssemblyName>
+        <RootNamespace>Jay.SourceGen</RootNamespace>
+        <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+        <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
+        <!-- Recommended by VS -->
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <Configurations>Debug;Release;Attach</Configurations>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="IndexRange" Version="1.0.2" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <PackageReference Include="Fody" Version="6.6.4">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="InlineIL.Fody" Version="1.7.4" >
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="PolySharp" Version="1.12.1">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\LICENSE.md">
+            <Pack>True</Pack>
+            <PackagePath>\</PackagePath>
+        </None>
+        <None Include="..\README.md">
+            <Pack>True</Pack>
+            <PackagePath>\</PackagePath>
+        </None>
+    </ItemGroup>
+
+</Project>

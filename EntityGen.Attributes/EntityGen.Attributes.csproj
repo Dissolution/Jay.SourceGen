@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <!-- Use the latest + greatest features -->
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>true</ImplicitUsings>
+        <!-- Jay.SourceGen.XxxGen -->
+        <AssemblyName>Jay.SourceGen.$(MSBuildProjectName)</AssemblyName>
+        <RootNamespace>Jay.SourceGen.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+        <Configurations>Debug;Release;Attach</Configurations>
+
+    </PropertyGroup>
+
+</Project>
