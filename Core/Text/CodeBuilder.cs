@@ -1,5 +1,6 @@
 ﻿using Jay.Text.Extensions;
 
+using System;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -12,6 +13,14 @@ namespace Jay.SourceGen.Text;
 /// </summary>
 public sealed class CodeBuilder : IDisposable
 {
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Environment.NewLine"/> is not allowed to be used for Source Generators, as it may change on different compilation platforms. <br/>
+    /// <c>'\n'</c> is recommended for compatability with Linux and git <br/>
+    /// I've chosen to use <c>"\r\n"</c> (from Windows) as the default as I'm a M$ fanboy
+    /// </remarks>
     public static string DefaultNewLine { get; set; } = "\r\n";
 
     /// <summary>
@@ -24,6 +33,10 @@ public sealed class CodeBuilder : IDisposable
     /// </summary>
     private int _position;
 
+    /// <summary>
+    /// The current <see cref="string"/> written during a <see cref="NewLine"/> operation. <br/>
+    /// This includes not only <see cref="DefaultNewLine"/>, but also the current indent
+    /// </summary>
     private string _newLineIndent;
 
     /// <summary>
@@ -40,7 +53,7 @@ public sealed class CodeBuilder : IDisposable
     /// <br/>
     /// <b>Caution</b>: If you write to <see cref="Available"/>, you must also update <see cref="Length"/>!
     /// </summary>
-    public Span<char> Available
+    internal Span<char> Available
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => _charArray.AsSpan(_position);
@@ -68,7 +81,7 @@ public sealed class CodeBuilder : IDisposable
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => _position;
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        set => _position = value.Clamp(0, Capacity);
+        internal set => _position = value.Clamp(0, Capacity);
     }
 
     public ref char this[int index]
@@ -82,7 +95,7 @@ public sealed class CodeBuilder : IDisposable
             throw new ArgumentOutOfRangeException(nameof(index), index,
                 _position == 0
                     ? $"There are no characters to index"
-                    : $"{nameof(index)} must be between 0 and {_position - 1}");
+                    : $"{nameof(index)} must be within [0..{_position})");
         }
     }
 
@@ -93,10 +106,22 @@ public sealed class CodeBuilder : IDisposable
             (int offset, int length) = range.GetOffsetAndLength(_position);
             if ((uint)offset + (uint)length <= _position)
             {
-                return _charArray.AsSpan()[range];
+                return _charArray.AsSpan(range);
             }
             throw new ArgumentOutOfRangeException(nameof(range), range,
-                $"Range '{range}' did not fit in [0..{_position})");
+                $"Range '{range}' must be within [0..{_position})");
+        }
+    }
+
+    public Span<char> CurrentLine
+    {
+        get
+        {
+            var written = Written;
+            var finalNWIndex = written.LastIndexOf<char>(DefaultNewLine.AsSpan());
+            if (finalNWIndex == -1)
+                return written;
+            return written.Slice(finalNWIndex);
         }
     }
 
@@ -116,7 +141,8 @@ public sealed class CodeBuilder : IDisposable
     {
         _charArray = ArrayPool<char>.Shared.Rent(Math.Max(minCapacity, 1024));
         _position = 0;
-        _newLineIndent = "\r\n";
+        // Start with no indent
+        _newLineIndent = DefaultNewLine;
     }
 
 
@@ -129,43 +155,100 @@ public sealed class CodeBuilder : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void GrowCore(int minCapacity)
     {
-        Debug.Assert(minCapacity > 1024);
-        Debug.Assert(minCapacity > Capacity);
+        Debug.Assert(minCapacity >= _position);
 
         // Get a new array at least minCapacity big
         char[] newArray = ArrayPool<char>.Shared.Rent(minCapacity);
         // Copy our written to it
-        Written.CopyTo(newArray.AsSpan());
+        TextHelper.Unsafe.CopyTo(_charArray, newArray, _position);
 
-        // Store an array to return (we may not have one)
-        char[]? toReturn = _charArray;
-        // Set our newarray to our current array + span
+        // We need to return our current array
+        char[] toReturn = _charArray;
+
+        // Store the new array as our current (_position does not change)
         _charArray = newArray;
 
-        // Return the borrowed array
+        // Return and clear the old array
         ArrayPool<char>.Shared.Return(toReturn, true);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private void GrowTo(int minCapacity)
+    public void GrowTo(int minCapacity)
     {
-        int curCapacity = Capacity;
-        Debug.Assert(minCapacity > curCapacity);
-        int newCapacity = (minCapacity + curCapacity);
-        GrowCore(newCapacity);
+        if (minCapacity > Capacity)
+        {
+            // Give them exactly what they've asked for
+            GrowCore(minCapacity);
+        }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     public void GrowBy(int adding)
     {
+        // So long as they have an amount, we will grow
         if (adding > 0)
         {
-            int curCapacity = Capacity;
-            int newCapacity = (adding + curCapacity) * 2;
+            // If we have to add, we want to go big
+            int newCapacity = (adding + Capacity) * 2;
             GrowCore(newCapacity);
         }
     }
     #endregion
+
+    public Span<char> Allocate(int count)
+    {
+        if (count > 0)
+        {
+            // start of allocation
+            var start = _position;
+            // The end of the allocation
+            var end = start + count;
+            // Check for growth
+            if (end > Capacity)
+            {
+                GrowBy(count); // Prefer growby
+            }
+            // Move position
+            _position = end;
+
+            // return allocated Span
+            return _charArray.AsSpan(start..end);
+        }
+        // They requested nothing
+        return Span<char>.Empty;
+    }
+
+    public CodeBuilder Append(char ch)
+    {
+        Allocate(1)[0] = ch;
+        return this;
+    }
+    public CodeBuilder Append(string? str)
+    {
+        if (str is not null)
+        {
+            var len = str.Length;
+            if (len > 0)
+            {
+                TextHelper.Unsafe.CopyTo(str, Allocate(len), len);
+            }
+        }
+        return this;
+    }
+    public CodeBuilder Append(scoped ReadOnlySpan<char> text)
+    {
+        var len = text.Length;
+        if (len > 0)
+        {
+            TextHelper.Unsafe.CopyTo(text, Allocate(len), len);
+        }
+        return this;
+    }
+
+    public CodeBuilder AppendLine(char ch) => Append(ch).NewLine();
+    public CodeBuilder AppendLine(string? str) => Append(str).NewLine();
+    public CodeBuilder AppendLine(scoped ReadOnlySpan<char> text) => Append(text).NewLine();
+
 
     private void WriteFormatLine(ReadOnlySpan<char> format, object?[] args)
     {
@@ -191,12 +274,12 @@ public sealed class CodeBuilder : IDisposable
                 int countUntilNextBrace = remainder.IndexOfAny('{', '}');
                 if (countUntilNextBrace < 0)
                 {
-                    this.Append(remainder);
+                    Append(remainder);
                     return;
                 }
 
                 // Append the text until the brace.
-                this.Append(remainder.Slice(0, countUntilNextBrace));
+                Append(remainder.Slice(0, countUntilNextBrace));
                 pos += countUntilNextBrace;
 
                 // Get the brace.
@@ -206,7 +289,7 @@ public sealed class CodeBuilder : IDisposable
                 ch = moveNext(format, ref pos);
                 if (brace == ch)
                 {
-                    this.Append(ch);
+                    Append(ch);
                     pos++;
                     continue;
                 }
@@ -353,30 +436,20 @@ public sealed class CodeBuilder : IDisposable
         }
     }
 
-    public Span<char> Allocate(int count)
-    {
-        if (count > 0)
-        {
-            // Start + End of alloaction
-            var start = _position;
-            // The end of the allocation
-            var end = start + count;
-            // Check for growth
-            if (end > Capacity)
-            {
-                GrowTo(end);
-            }
-            // Move position
-            _position = end;
-            // return allocated Span
-            return _charArray.AsSpan()[start..end];
-        }
-        return Span<char>.Empty;
-    }
 
     public CodeBuilder NewLine()
     {
-        return this.Append(_newLineIndent);
+        return Append(_newLineIndent);
+    }
+
+    internal CodeBuilder IndentAwareAppend(CBA codeBuilderAction)
+    {
+        var oldIndent = _newLineIndent;
+        var currentIndent = this.CurrentLine.ToString();
+        _newLineIndent = currentIndent;
+        codeBuilderAction(this);
+        _newLineIndent = oldIndent;
+        return this;
     }
 
     public CodeBuilder Value<T>(
@@ -393,21 +466,15 @@ public sealed class CodeBuilder : IDisposable
             }
             case CBA cba:
             {
-                // Indent-aware
-                var oldIndent = _newLineIndent;
-                var currentIndent = this.CurrentNewLineIndent();
-                _newLineIndent = currentIndent;
-                cba(this);
-                _newLineIndent = oldIndent;
-                return this;
+                return IndentAwareAppend(cba);
             }
             case string str:
             {
-                return this.Append(str);;
+                return Append(str);
             }
             case IFormattable formattable:
             {
-                return this.Append(formattable.ToString(format, provider));
+                return Append(formattable.ToString(format, provider));
             }
             case IEnumerable enumerable:
             {
@@ -418,22 +485,42 @@ public sealed class CodeBuilder : IDisposable
                     (w, v) => w.Value<object?>(v, default, provider)
                 );
             }
+            case Delegate del:
+            {
+                // Check for CBA compat
+                var method = del.Method;
+                if (method.ReturnType != typeof(void)) break;
+                var methodParams = method.GetParameters();
+                if (methodParams.Length != 1 || methodParams[0].ParameterType != typeof(CodeBuilder)) break;
+
+                // Convert into CBA
+                CBA? cba = Delegate.CreateDelegate(typeof(CBA), del.Target, del.Method) as CBA;
+                if (cba is not null)
+                {
+                    return IndentAwareAppend(cba);
+                }
+                // Cannot cast, fallthrough
+                break;
+            }
             default:
             {
-                return this.Append(value.ToString());
+                break;
             }
         }
+
+        var valueType = value.GetType();
+        return Append(value.ToString());
     }
 
     public CodeBuilder Code(NonFormattableString code)
     {
-        var lines = code.Text.TextSplit(DefaultNewLine).ToList();
+        var lines = code.Text.TextSplit(DefaultNewLine);
         var e = lines.GetEnumerator();
+        if (!e.MoveNext()) return this;
+        Append(e.Current);
         while (e.MoveNext())
         {
-            if (e.Index > 0)
-                NewLine();
-            this.Append(e.Current);
+            NewLine().Append(e.Current);
         }
         return this;
     }
@@ -442,27 +529,246 @@ public sealed class CodeBuilder : IDisposable
     {
         ReadOnlySpan<char> format = code.Format.AsSpan();
         object?[] formatArgs = code.GetArguments();
-        var lines = format.TextSplit(DefaultNewLine).ToList();
+        var lines = format.TextSplit(DefaultNewLine);
         var e = lines.GetEnumerator();
+        if (!e.MoveNext()) return this;
+        WriteFormatLine(e.CharSpan, formatArgs);
         while (e.MoveNext())
         {
-            if (e.Index > 0)
-                NewLine();
-            WriteFormatLine(e.Span, formatArgs);
+            NewLine();
+            WriteFormatLine(e.CharSpan, formatArgs);
         }
         return this;
     }
 
     public CodeBuilder CodeLine(NonFormattableString code) => Code(code).NewLine();
-    public CodeBuilder CodeLine(FormattableString code) => Code(code).NewLine();
+    public CodeBuilder CodeBlock(FormattableString code) => Code(code).NewLine();
+
+    #region Remove + Trim
+    public bool TryRemove(int index)
+    {
+        if ((uint)index >= _position) return false;
+        var written = Written;
+        var right = written.Slice(index + 1);
+        var dest = written.Slice(index);
+        TextHelper.Unsafe.CopyTo(right, dest, right.Length);
+        _position -= 1;
+        return true;
+    }
+
+    public bool TryRemove(int index, out char ch)
+    {
+        if ((uint)index >= _position)
+        {
+            ch = default;
+            return false;
+        }
+        var written = Written;
+        ch = written[index];
+        var right = written.Slice(index + 1);
+        var dest = written.Slice(index);
+        TextHelper.Unsafe.CopyTo(right, dest, right.Length);
+        _position -= 1;
+        return true;
+    }
+
+    public bool TryRemove(int start, int length)
+    {
+        if ((uint)start + (uint)length > _position) return false;
+        if (length > 0)
+        {
+            var written = Written;
+            var right = written.Slice(start + length);
+            var dest = written.Slice(start);
+            TextHelper.Unsafe.CopyTo(right, dest, right.Length);
+            _position -= length;
+        }
+        return true;
+    }
+
+    public bool TryRemove(int start, int length, [NotNullWhen(true)] out string? slice)
+    {
+        if ((uint)start + (uint)length > _position)
+        {
+            slice = null;
+            return false;
+        }
+        if (length > 0)
+        {
+            var written = Written;
+            slice = written.Slice(start, length).ToString();
+            var right = written.Slice(start + length);
+            var dest = written.Slice(start);
+            TextHelper.Unsafe.CopyTo(right, dest, right.Length);
+            _position -= length;
+        }
+        else
+        {
+            slice = "";
+        }
+        return true;
+    }
+
+    public bool TryRemove(Range range)
+    {
+        (int offset, int length) = range.GetOffsetAndLength(_position);
+        if ((uint)offset + (uint)length > (uint)_position) return false;
+        if (length > 0)
+        {
+            var written = Written;
+            var right = written.Slice(offset + length);
+            var dest = written.Slice(offset);
+            TextHelper.Unsafe.CopyTo(right, dest, right.Length);
+            _position -= length;
+        }
+        return true;
+    }
+
+    public bool TryRemove(Range range, [NotNullWhen(true)] out string? slice)
+    {
+        (int offset, int length) = range.GetOffsetAndLength(_position);
+        if ((uint)offset + (uint)length > _position)
+        {
+            slice = null;
+            return false;
+        }
+        if (length > 0)
+        {
+            var written = Written;
+            slice = written.Slice(offset, length).ToString();
+            var right = written.Slice(offset + length);
+            var dest = written.Slice(offset);
+            TextHelper.Unsafe.CopyTo(right, dest, right.Length);
+            _position -= length;
+        }
+        else
+        {
+            slice = "";
+        }
+        return true;
+    }
+
+    public CodeBuilder TrimStart()
+    {
+        var written = Written;
+        int len = _position;
+        int i = 0;
+        while (i < len && char.IsWhiteSpace(written[i]))
+            i++;
+        if (i > 0)
+        {
+            TextHelper.CopyTo(written[i..], written);
+            _position -= i;
+        }
+        return this;
+    }
+
+    public CodeBuilder TrimEnd()
+    {
+        var written = Written;
+        int len = _position;
+        int e = _position - 1;
+        while (e >= 0 && char.IsWhiteSpace(written[e]))
+            e--;
+        if (e < _position - 1)
+        {
+            _position = e + 1;
+        }
+        return this;
+    }
+
+
+
+    #endregion
+
+    #region Enumeration
+    public CodeBuilder Enumerate<T>(
+       IEnumerable<T>? values,
+       CBIA<T>? perValueAction)
+    {
+        if (values is null || perValueAction is null) return this;
+        using var e = values.GetEnumerator();
+        int index = 0;
+        if (!e.MoveNext()) return this;
+        perValueAction?.Invoke(this, e.Current, index);
+        while (e.MoveNext())
+        {
+            index++;
+            perValueAction?.Invoke(this, e.Current, index);
+        }
+        return this;
+    }
+
+    public CodeBuilder Enumerate<T>(
+        IEnumerable<T>? values,
+        CBA<T>? perValueAction)
+    {
+        if (values is null || perValueAction is null) return this;
+        using var e = values.GetEnumerator();
+        if (!e.MoveNext()) return this;
+        perValueAction?.Invoke(this, e.Current);
+        while (e.MoveNext())
+        {
+            perValueAction?.Invoke(this, e.Current);
+        }
+        return this;
+    }
+
+    public CodeBuilder Delimit<T>(
+        CBA? delimitAction,
+        IEnumerable<T>? values,
+        CBIA<T>? perValueAction)
+    {
+        if (values is null || (delimitAction is null && perValueAction is null)) return this;
+        using var e = values.GetEnumerator();
+        int index = 0;
+        if (!e.MoveNext()) return this;
+        perValueAction?.Invoke(this, e.Current, index);
+        while (e.MoveNext())
+        {
+            delimitAction?.Invoke(this);
+            index++;
+            perValueAction?.Invoke(this, e.Current, index);
+        }
+        return this;
+    }
+
+    public CodeBuilder Delimit<T>(
+        CBA? delimitAction,
+        IEnumerable<T>? values,
+        CBA<T>? perValueAction)
+    {
+        if (values is null || (delimitAction is null && perValueAction is null)) return this;
+        using var e = values.GetEnumerator();
+        if (!e.MoveNext()) return this;
+        perValueAction?.Invoke(this, e.Current);
+        while (e.MoveNext())
+        {
+            delimitAction?.Invoke(this);
+            perValueAction?.Invoke(this, e.Current);
+        }
+        return this;
+    }
+
+    public CodeBuilder Delimit<T>(
+       string delimiter,
+       IEnumerable<T>? values,
+       CBA<T>? perValueAction)
+    {
+        if (string.IsNullOrEmpty(delimiter))
+            return Enumerate<T>(values, perValueAction);
+        return Delimit<T>(b => b.Code(delimiter), values, perValueAction);
+    }
+    #endregion
+
 
     public CodeBuilder IndentBlock(string indent, CBA indentBlock)
     {
         var oldIndent = _newLineIndent;
         // We might be on a new line, but not yet indented
-        if (this.CurrentNewLineIndent() == oldIndent)
+        if (TextHelper.Equals(this.CurrentLine, oldIndent))
         {
-            this.Append(indent);
+            Append(indent);
         }
 
         var newIndent = oldIndent + indent;
@@ -472,8 +778,8 @@ public sealed class CodeBuilder : IDisposable
         // Did we do a newline that we need to decrease?
         if (Written.EndsWith(newIndent.AsSpan()))
         {
-            this.Length -= newIndent.Length;
-            this.Append(oldIndent);
+            _position -= newIndent.Length;
+            Append(oldIndent);
         }
         return this;
     }
@@ -548,8 +854,7 @@ public sealed class CodeBuilder : IDisposable
 
     public CodeBuilder Nullable(bool enable = true)
     {
-        return this
-            .Append("#nullable ")
+        return this.Append("#nullable ")
             .Append(enable ? "enable" : "disable")
             .NewLine();
     }
@@ -615,26 +920,25 @@ public sealed class CodeBuilder : IDisposable
          * But we do want to watch out for newline characters to turn
          * this into a multi-line comment */
 
-        var comments = comment.TextSplit(DefaultNewLine)
-            .ToList();
-
-        // Null or empty comment is blank
-        if (comments.Count == 0)
+        var comments = comment.TextSplit(DefaultNewLine).GetEnumerator();
+        if (!comments.MoveNext())
         {
+            // Null or empty comment is blank
             return this.AppendLine("// ");
         }
-        // Only a single comment?
-        if (comments.Count == 1)
+        var cmnt = comments.CharSpan;
+        if (!comments.MoveNext())
         {
-            // Single line
-            return this.Append("// ").AppendLine(comments.Text(0));
+            // Only a single comment
+            return this.Append("// ").AppendLine(cmnt);
         }
 
         // Multiple comments
-        this.Append("/* ").AppendLine(comments.Text(0));
-        for (var i = 1; i < comments.Count; i++)
+        this.Append("/* ").AppendLine(cmnt);
+        this.Append(" * ").AppendLine(comments.CharSpan);
+        while (comments.MoveNext())
         {
-            this.Append(" * ").AppendLine(comments.Text(i));
+            this.Append(" * ").AppendLine(comments.CharSpan);
         }
         return this.AppendLine(" */");
     }
@@ -642,45 +946,51 @@ public sealed class CodeBuilder : IDisposable
     public CodeBuilder Comment(string? comment, CommentType commentType)
     {
         var splitEnumerable = comment.TextSplit(DefaultNewLine);
-        if (commentType == CommentType.SingleLine)
+        switch (commentType)
         {
-            foreach (var line in splitEnumerable)
+            case CommentType.SingleLine:
             {
-                this.Append("// ").AppendLine(line);
+                foreach (var line in splitEnumerable)
+                {
+                    Append("// ").AppendLine(line);
+                }
+                break;
             }
-        }
-        else if (commentType == CommentType.XML)
-        {
-            foreach (var line in splitEnumerable)
+            case CommentType.XML:
             {
-                this.Append("/// ").AppendLine(line);
+                foreach (var line in splitEnumerable)
+                {
+                    Append("/// ").AppendLine(line);
+                }
+                break;
             }
-        }
-        else
-        {
-            var comments = splitEnumerable.ToList();
+            case CommentType.MultiLine:
+            {
+                var comments = comment.TextSplit(DefaultNewLine).GetEnumerator();
+                if (!comments.MoveNext())
+                {
+                    // Null or empty comment is blank
+                    return AppendLine("/* */");
+                }
+                var cmnt = comments.CharSpan;
+                if (!comments.MoveNext())
+                {
+                    // Only a single comment
+                    return Append("/* ").Append(cmnt).AppendLine(" */");
+                }
 
-            // Null or empty comment is blank
-            if (comments.Count == 0)
-            {
-                return this.AppendLine("/* */");
+                // Multiple comments
+                Append("/* ").AppendLine(cmnt);
+                Append(" * ").AppendLine(comments.CharSpan);
+                while (comments.MoveNext())
+                {
+                    Append(" * ").AppendLine(comments.CharSpan);
+                }
+                return AppendLine(" */");
             }
-            // Only a single comment?
-            if (comments.Count == 1)
-            {
-                // Single line
-                return this.Append("/* ").Append(comments.Text(0)).AppendLine(" */");
-            }
-
-            // Multiple comments
-            this.Append("/* ").AppendLine(comments.Text(0));
-            for (var i = 1; i < comments.Count; i++)
-            {
-                this.Append(" * ").AppendLine(comments.Text(i));
-            }
-            return this.AppendLine(" */");
+            default:
+                throw new ArgumentOutOfRangeException(nameof(commentType));
         }
-
         return this;
     }
     #endregion
@@ -711,6 +1021,8 @@ public sealed class CodeBuilder : IDisposable
         }
         return this;
     }
+
+
 
     public bool TryCopyTo(Span<char> destination)
     {

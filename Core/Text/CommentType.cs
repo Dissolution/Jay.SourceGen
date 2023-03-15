@@ -17,7 +17,7 @@ public enum CommentType
     /// <c>
     /// /* comment 1<br/>
     ///  * comment 2<br/>
-    /// */<br/>
+    ///  */<br/>
     /// </c>
     /// </summary>
     MultiLine,

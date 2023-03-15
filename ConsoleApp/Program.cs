@@ -1,10 +1,14 @@
 ﻿using Jay.SourceGen.EnumGen.Attributes;
 using System.Diagnostics;
+using ConsoleApp;
 
 
 TestEnum none = TestEnum.Alpha;
 
 string? str = none.ToString();
+
+bool isDefault = none == default;
+var memberCount = TestEnum.Members.Count;
 
 Debugger.Break();
 
@@ -12,10 +16,3 @@ Console.WriteLine("Press [Enter] to close.");
 Console.ReadLine();
 
 
-[Enum]
-public readonly struct TestEnum
-{
-    public static readonly TestEnum None = new();
-    public static readonly TestEnum Alpha = new();
-    public static readonly TestEnum Beta = new();
-}

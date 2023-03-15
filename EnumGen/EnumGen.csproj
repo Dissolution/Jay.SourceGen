@@ -12,6 +12,7 @@
         <RootNamespace>Jay.SourceGen.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
         <!-- 👇 We don't want to reference the source generator dll directly in consuming projects -->
         <IncludeBuildOutput>false</IncludeBuildOutput>
+        <IsRoslynComponent>true</IsRoslynComponent>
         <!-- Recommended by VS -->
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <Configurations>Debug;Release;Attach</Configurations>
@@ -21,6 +22,17 @@
         <DefineConstants>$(DefineConstants);DEBUG</DefineConstants>
     </PropertyGroup>
 
+    <!-- The following libraries include the source generator interfaces and types we need -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <!-- Generator Dependencies -->
     <ItemGroup>
         <PackageReference Include="IndexRange" Version="1.0.2">
             <GeneratePathProperty>true</GeneratePathProperty>
@@ -33,41 +45,43 @@
         </PackageReference>
     </ItemGroup>
 
+    <!-- Project References -->
+    <ItemGroup>
+        <ProjectReference Include="..\Core\Jay.SourceGen.csproj">
+            <GeneratePathProperty>true</GeneratePathProperty>
+            <PrivateAssets>all</PrivateAssets>
+        </ProjectReference>
+        <ProjectReference Include="..\EnumGen.Attributes\EnumGen.Attributes.csproj" >
+            <PrivateAssets>all</PrivateAssets>
+        </ProjectReference>
+    </ItemGroup>
+
+    <!-- Transient Dependency Fixes -->
     <PropertyGroup>
         <GetTargetPathDependsOn>$(GetTargetPathDependsOn);GetDependencyTargetPaths</GetTargetPathDependsOn>
     </PropertyGroup>
-
     <Target Name="GetDependencyTargetPaths">
-    <ItemGroup>
-      <TargetPathWithTargetPlatformMoniker Include="$(PKGIndexRange)\lib\netstandard2.0\IndexRange.dll" IncludeRuntimeDependency="false" />
-    </ItemGroup>
-  </Target>
-    
-    <!-- The following libraries include the source generator interfaces and types we need -->
-    <ItemGroup>
-        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4">
-            <PrivateAssets>all</PrivateAssets>
-        </PackageReference>
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.5.0">
-            <PrivateAssets>all</PrivateAssets>
-        </PackageReference>
-
-    </ItemGroup>
+        <ItemGroup>
+            <TargetPathWithTargetPlatformMoniker Include="$(PKGIndexRange)\lib\netstandard2.0\IndexRange.dll" IncludeRuntimeDependency="false" />
+            <!--<TargetPathWithTargetPlatformMoniker Include="$(PKGPolySharp)\lib\netstandard2.0\PolySharp.dll" IncludeRuntimeDependency="false" />-->
+        </ItemGroup>
+    </Target>
 
     <!-- This ensures the library will be packaged as a source generator when we use `dotnet pack` -->
-    <ItemGroup>
+    <!--<ItemGroup>
         <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
 
-        <!-- Pack the attributes dll in the analyzers/dotnet/cs path -->
+        -->
+    <!-- Pack the attributes dll in the analyzers/dotnet/cs path -->
+    <!--
         <None Include="$(OutputPath)\Jay.SourceGen.EnumGen.Attributes.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
 
-        <!-- Pack the attributes dll in the lib\netstandard2.0 path -->
+        -->
+    <!-- Pack the attributes dll in the lib\netstandard2.0 path -->
+            <!--<ProjectReference Include="..\EnumGen.Attributes\EnumGen.Attributes.csproj">-->
+<!--
         <None Include="$(OutputPath)\Jay.SourceGen.EnumGen.Attributes.dll" Pack="true" PackagePath="lib\netstandard2.0" Visible="true" />
 
-    </ItemGroup>
+    </ItemGroup>-->
 
-    <ItemGroup>
-        <ProjectReference Include="..\Core\Jay.SourceGen.csproj" GeneratePathProperty="true" PrivateAssets="all" />
-        <ProjectReference Include="..\EnumGen.Attributes\EnumGen.Attributes.csproj" PrivateAssets="all" />
-    </ItemGroup>
 </Project>
