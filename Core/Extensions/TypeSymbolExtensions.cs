@@ -25,6 +25,12 @@ public static class TypeSymbolExtensions
 
         return typeSymbol.ToDisplayString(symbolDisplayFormat);
     }
+    public static string GetFQNamespace(this ITypeSymbol typeSymbol)
+    {
+        var nsSymbol = typeSymbol.ContainingNamespace;
+        var ns = nsSymbol.ToString();
+        return ns;
+    }
 
     public static bool CanBeNull(this ITypeSymbol typeSymbol)
     {

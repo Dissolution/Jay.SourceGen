@@ -1,6 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 
-namespace Jay.Text.Extensions;
+namespace Jay.SourceGen.Extensions;
 
 public static class CharExtensions
 {

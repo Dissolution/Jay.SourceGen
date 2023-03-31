@@ -1,6 +1,6 @@
 ﻿using Jay.SourceGen.Text;
 
-namespace Jay.Text.Extensions;
+namespace Jay.SourceGen.Extensions;
 
 
 

@@ -1,18 +1,27 @@
-﻿using Jay.SourceGen.EnumGen.Attributes;
-using System.Diagnostics;
-using ConsoleApp;
+﻿using Jay.SourceGen.InterfaceGen.Attributes;
+using Jay.SourceGen.InterfaceGen;
+using Jay.SourceGen.ConsoleApp;
 
+var entity = new Entity();
 
-TestEnum none = TestEnum.Alpha;
+string? str = entity.ToString();
 
-string? str = none.ToString();
-
-bool isDefault = none == default;
-var memberCount = TestEnum.Members.Count;
-
-Debugger.Break();
 
 Console.WriteLine("Press [Enter] to close.");
 Console.ReadLine();
 
 
+
+
+
+
+
+
+//TestEnum none = TestEnum.Alpha;
+
+//string? str = none.ToString();
+
+//bool isDefault = none == default;
+//var memberCount = TestEnum.Members.Count;
+
+//Debugger.Break();

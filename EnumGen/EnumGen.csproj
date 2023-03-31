@@ -51,7 +51,7 @@
             <GeneratePathProperty>true</GeneratePathProperty>
             <PrivateAssets>all</PrivateAssets>
         </ProjectReference>
-        <ProjectReference Include="..\EnumGen.Attributes\EnumGen.Attributes.csproj" >
+        <ProjectReference Include="..\EnumGen.Attributes\EnumGen.Attributes.csproj">
             <PrivateAssets>all</PrivateAssets>
         </ProjectReference>
     </ItemGroup>

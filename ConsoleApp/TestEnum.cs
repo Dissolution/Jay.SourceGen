@@ -1,18 +1,18 @@
-﻿using Jay.SourceGen.EnumGen.Attributes;
+﻿//using Jay.SourceGen.EnumGen.Attributes;
 
-namespace ConsoleApp;
+//namespace Jay.SourceGen.ConsoleApp;
 
-[Enum]
-public readonly partial struct TestEnum
-{
-    public static readonly TestEnum None = new(' ');
-    public static readonly TestEnum Alpha = new('A');
-    public static readonly TestEnum Beta = new('B');
+//[Enum]
+//public readonly partial struct TestEnum
+//{
+//    public static readonly TestEnum None = new(' ');
+//    public static readonly TestEnum Alpha = new('A');
+//    public static readonly TestEnum Beta = new('B');
 
-    public readonly char Character;
+//    public readonly char Character;
 
-    public override string ToString()
-    {
-        return Character.ToString();
-    }
-}
+//    public override string ToString()
+//    {
+//        return Character.ToString();
+//    }
+//}

@@ -1,6 +1,4 @@
-﻿using Jay.Text.Extensions;
-
-using System;
+﻿using System;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -22,6 +20,14 @@ public sealed class CodeBuilder : IDisposable
     /// I've chosen to use <c>"\r\n"</c> (from Windows) as the default as I'm a M$ fanboy
     /// </remarks>
     public static string DefaultNewLine { get; set; } = "\r\n";
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <remarks>
+    /// spaces > tabs
+    /// </remarks>
+    public static string DefaultIndent { get; set; } = "    ";
 
     /// <summary>
     /// Rented <see cref="char"/><c>[]</c> from pool
@@ -441,6 +447,14 @@ public sealed class CodeBuilder : IDisposable
     {
         return Append(_newLineIndent);
     }
+    public CodeBuilder NewLines(int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            Append(_newLineIndent);
+        }
+        return this;
+    }
 
     internal CodeBuilder IndentAwareAppend(CBA codeBuilderAction)
     {
@@ -759,8 +773,19 @@ public sealed class CodeBuilder : IDisposable
             return Enumerate<T>(values, perValueAction);
         return Delimit<T>(b => b.Code(delimiter), values, perValueAction);
     }
+
+     public CodeBuilder DelimitAppend<T>(
+       string delimiter,
+       IEnumerable<T>? values)
+    {
+        return Delimit<T>(delimiter, values, static (b,v) => b.Value<T>(v));
+    }
     #endregion
 
+    public CodeBuilder IndentBlock(CBA indentBlock)
+    { 
+        return IndentBlock(DefaultIndent, indentBlock);
+    }
 
     public CodeBuilder IndentBlock(string indent, CBA indentBlock)
     {
@@ -996,22 +1021,14 @@ public sealed class CodeBuilder : IDisposable
     #endregion
 
 
+
     public CodeBuilder If(
         bool predicateResult,
         CBA? ifTrue,
         CBA? ifFalse = null
     )
     {
-        return If(() => predicateResult, ifTrue, ifFalse);
-    }
-
-    public CodeBuilder If(
-        Func<bool> predicate,
-        CBA? ifTrue,
-        CBA? ifFalse = null
-    )
-    {
-        if (predicate())
+        if (predicateResult)
         {
             ifTrue?.Invoke(this);
         }
@@ -1020,6 +1037,29 @@ public sealed class CodeBuilder : IDisposable
             ifFalse?.Invoke(this);
         }
         return this;
+    }
+
+    public CodeBuilder AppendIf(bool predicateResult, string? strIfTrue, string? strIfFalse = default)
+    {
+        if (predicateResult)
+        {
+            return Append(strIfTrue);
+        }
+        else
+        {
+            return Append(strIfFalse);
+        }
+    }
+    public CodeBuilder AppendIf(bool predicateResult, ReadOnlySpan<char> textIfTrue, ReadOnlySpan<char> textIfFalse = default)
+    {
+        if (predicateResult)
+        {
+            return Append(textIfTrue);
+        }
+        else
+        {
+            return Append(textIfFalse);
+        }
     }
 
 

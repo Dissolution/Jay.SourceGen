@@ -33,12 +33,12 @@
     
     <!-- Attribute Projects -->
     <ItemGroup>
-        <ProjectReference Include="..\EnumGen.Attributes\EnumGen.Attributes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
+        <ProjectReference Include="..\InterfaceGen.Attributes\InterfaceGen.Attributes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
     </ItemGroup>
 
     <!-- Source Generator Projects-->
     <ItemGroup>
-        <ProjectReference Include="..\EnumGen\EnumGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\InterfaceGen\InterfaceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
 </Project>

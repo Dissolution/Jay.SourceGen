@@ -1,56 +1,50 @@
-﻿using Jay.SourceGen;
+﻿using System.Collections.Immutable;
+using System.Diagnostics;
 using Jay.SourceGen.EnumGen.Attributes;
 using Jay.SourceGen.Extensions;
 using Jay.SourceGen.Text;
-
-using Jaynums.SourceGen;
-
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using System.Collections.Immutable;
-using System.Diagnostics;
+namespace Jay.SourceGen.EnumGen;
 
-namespace Jay.SourceGen.EnumGen
+[Generator]
+public sealed class EnumImplGenerator : IIncrementalGenerator
 {
-    [Generator]
-    public sealed class EnumImplGenerator : IIncrementalGenerator
+    public string AttributeFQN => $"Jay.SourceGen.EnumGen.Attributes.{nameof(EnumAttribute)}";
+
+    public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        public string AttributeFQN => $"Jay.SourceGen.EnumGen.Attributes.{nameof(EnumAttribute)}";
-
-        public void Initialize(IncrementalGeneratorInitializationContext context)
+        // Add any post-init output files
+        context.RegisterPostInitializationOutput(ctx =>
         {
-            // Add any post-init output files
-            context.RegisterPostInitializationOutput(ctx =>
-            {
-                //foreach (var sourceCode in GetPostInitOutput())
-                //{
-                //    ctx.AddSource(sourceCode.FileName, sourceCode.Code);
-                //}
-            });
+            //foreach (var sourceCode in GetPostInitOutput())
+            //{
+            //    ctx.AddSource(sourceCode.FileName, sourceCode.Code);
+            //}
+        });
 
-            // Initial filter for the attribute
-            var typeDeclarations = context.SyntaxProvider
-                .ForAttributeWithMetadataName(
+        // Initial filter for the attribute
+        var typeDeclarations = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
                 fullyQualifiedMetadataName: AttributeFQN,
                 (syntaxNode, _) => syntaxNode is TypeDeclarationSyntax,
                 (ctx, _) => (TypeDeclarationSyntax)ctx.TargetNode);
 
-            // Combine with compilation
-            var compilationAndDeclarations = context.CompilationProvider.Combine(typeDeclarations.Collect());
+        // Combine with compilation
+        var compilationAndDeclarations = context.CompilationProvider.Combine(typeDeclarations.Collect());
 
-            // Send to processing
-            context.RegisterSourceOutput(compilationAndDeclarations,
-                (sourceContext, cads) => Process(cads.Left, sourceContext, cads.Right));
-        }
+        // Send to processing
+        context.RegisterSourceOutput(compilationAndDeclarations,
+            (sourceContext, cads) => Process(cads.Left, sourceContext, cads.Right));
+    }
 
-        private void Process(Compilation compilation,
-            SourceProductionContext sourceProductionContext,
-            ImmutableArray<TypeDeclarationSyntax> typeDeclarations)
-        {
-            // If we have nothing to process, exit quickly
-            if (typeDeclarations.IsDefaultOrEmpty) return;
+    private void Process(Compilation compilation,
+        SourceProductionContext sourceProductionContext,
+        ImmutableArray<TypeDeclarationSyntax> typeDeclarations)
+    {
+        // If we have nothing to process, exit quickly
+        if (typeDeclarations.IsDefaultOrEmpty) return;
 
 #if ATTACH
             if (!Debugger.IsAttached)
@@ -59,110 +53,109 @@ namespace Jay.SourceGen.EnumGen
             }
 #endif
 
-            // Get a passable CancellationToken
-            var token = sourceProductionContext.CancellationToken;
+        // Get a passable CancellationToken
+        var token = sourceProductionContext.CancellationToken;
 
-            // Load our attribute's symbol
-            INamedTypeSymbol? attributeSymbol = compilation
-                .GetTypesByMetadataName(this.AttributeFQN)
-                .FirstOrDefault();
-            if (attributeSymbol is null)
+        // Load our attribute's symbol
+        INamedTypeSymbol? attributeSymbol = compilation
+            .GetTypesByMetadataName(this.AttributeFQN)
+            .FirstOrDefault();
+        if (attributeSymbol is null)
+        {
+            // Cannot!
+            throw new InvalidOperationException($"Could not load {nameof(INamedTypeSymbol)} for {AttributeFQN}");
+        }
+
+        // As per several examples, we need a distinct list or a grouping on SyntaxTree
+        // I'm going with System.Text.Json's example
+
+        foreach (var group in typeDeclarations.GroupBy(static sd => sd.SyntaxTree))
+        {
+            SyntaxTree syntaxTree = group.Key;
+            SemanticModel semanticModel = compilation.GetSemanticModel(syntaxTree);
+            CompilationUnitSyntax unitSyntax = (syntaxTree.GetRoot(token) as CompilationUnitSyntax)!;
+
+            foreach (var typeDeclaration in group)
             {
-                // Cannot!
-                throw new InvalidOperationException($"Could not load {nameof(INamedTypeSymbol)} for {AttributeFQN}");
-            }
+                // Get the AttributeData
+                INamedTypeSymbol? typeSymbol = semanticModel.GetDeclaredSymbol(typeDeclaration) as INamedTypeSymbol;
+                if (typeSymbol is null)
+                    continue;
 
-            // As per several examples, we need a distinct list or a grouping on SyntaxTree
-            // I'm going with System.Text.Json's example
+                // Check if we have our attribute
+                // Necessary????
+                if (!typeSymbol.GetAttributes().Any(attr => string.Equals(attr.AttributeClass?.GetFQN(), AttributeFQN)))
+                    continue;
 
-            foreach (var group in typeDeclarations.GroupBy(static sd => sd.SyntaxTree))
-            {
-                SyntaxTree syntaxTree = group.Key;
-                SemanticModel semanticModel = compilation.GetSemanticModel(syntaxTree);
-                CompilationUnitSyntax unitSyntax = (syntaxTree.GetRoot(token) as CompilationUnitSyntax)!;
+                // We have a candidate
+                var sourceCodes = ProcessType(typeDeclaration, typeSymbol);
 
-                foreach (var typeDeclaration in group)
+                // Add whatever was produced
+                foreach (var sourceCode in sourceCodes)
                 {
-                    // Get the AttributeData
-                    INamedTypeSymbol? typeSymbol = semanticModel.GetDeclaredSymbol(typeDeclaration) as INamedTypeSymbol;
-                    if (typeSymbol is null)
-                        continue;
-
-                    // Check if we have our attribute
-                    // Necessary????
-                    if (!typeSymbol.GetAttributes().Any(attr => string.Equals(attr.AttributeClass?.GetFQN(), AttributeFQN)))
-                        continue;
-
-                    // We have a candidate
-                    var sourceCodes = ProcessType(typeDeclaration, typeSymbol);
-
-                    // Add whatever was produced
-                    foreach (var sourceCode in sourceCodes)
-                    {
-                        sourceProductionContext.AddSource(sourceCode.FileName, sourceCode.Code);
-                    }
+                    sourceProductionContext.AddSource(sourceCode.FileName, sourceCode.Code);
                 }
             }
         }
+    }
 
-        private IEnumerable<SourceCode> ProcessType(TypeDeclarationSyntax typeDeclarationSyntax, INamedTypeSymbol typeSymbol)
+    private IEnumerable<SourceCode> ProcessType(TypeDeclarationSyntax typeDeclarationSyntax, INamedTypeSymbol typeSymbol)
+    {
+        // has to be readonly struct
+        if (!typeDeclarationSyntax.HasKeyword(SyntaxKind.ReadOnlyKeyword))
+            yield break;
+        if (typeDeclarationSyntax is not StructDeclarationSyntax)
+            yield break;
+
+
+        // Look at the struct
+        var members = typeSymbol.GetMembers();
+
+        // Did they define their own ToString?
+        var hasToString = members
+            .OfType<IMethodSymbol>()
+            .Where(m => m.Name == nameof(ToString))
+            .Where(m => m.Parameters.IsDefaultOrEmpty)
+            .Any();
+
+        // We're interested in public fields
+        var publicFields = members
+            .OfType<IFieldSymbol>()
+            .Where(f => f.DeclaredAccessibility == Accessibility.Public)
+            .ToList();
+
+        // Some are enum members
+        var enumMembers = publicFields
+            .Where(f => f.Type.Equals(typeSymbol, SymbolEqualityComparer.Default))
+            .Where(f => f.IsStatic)
+            .Select(enumMember => enumMember.Name)
+            .ToList();
+
+        // Others are instance fields we need to respect
+        var instanceFields = publicFields
+            .Where(f => !f.Type.Equals(typeSymbol, SymbolEqualityComparer.Default))
+            .Where(f => !f.IsStatic)
+            .Select(instanceField => (instanceField.Name, instanceField.Type))
+            .ToList();
+
+        var attrData = new SymbolAttributeData(typeSymbol.GetAttributes());
+        if (!attrData.TryGetAttributeArg(AttributeFQN, out var attrArgs))
+            yield break;
+
+        // We do not care if it passes or fails as 'false' is the default
+        attrArgs.TryGetValue(nameof(EnumAttribute.Flags), out bool flags);
+
+        EnumStructToGenerate tg = new()
         {
-            // has to be readonly struct
-            if (!typeDeclarationSyntax.HasKeyword(SyntaxKind.ReadOnlyKeyword))
-                yield break;
-            if (typeDeclarationSyntax is not StructDeclarationSyntax)
-                yield break;
+            Flags = flags,
+            Type = typeSymbol,
+            InstanceFields = instanceFields,
+            EnumMembers = enumMembers,
+            HasToString = hasToString,
+        };
 
-
-            // Look at the struct
-            var members = typeSymbol.GetMembers();
-
-            // Did they define their own ToString?
-            var hasToString = members
-                .OfType<IMethodSymbol>()
-                .Where(m => m.Name == nameof(ToString))
-                .Where(m => m.Parameters.IsDefaultOrEmpty)
-                .Any();
-
-            // We're interested in public fields
-            var publicFields = members
-                .OfType<IFieldSymbol>()
-                .Where(f => f.DeclaredAccessibility == Accessibility.Public)
-                .ToList();
-
-            // Some are enum members
-            var enumMembers = publicFields
-               .Where(f => f.Type.Equals(typeSymbol, SymbolEqualityComparer.Default))
-               .Where(f => f.IsStatic)
-               .Select(enumMember => enumMember.Name)
-               .ToList();
-
-            // Others are instance fields we need to respect
-            var instanceFields = publicFields
-               .Where(f => !f.Type.Equals(typeSymbol, SymbolEqualityComparer.Default))
-               .Where(f => !f.IsStatic)
-               .Select(instanceField => (instanceField.Name, instanceField.Type))
-               .ToList();
-
-            var attrData = new SymbolAttributeData(typeSymbol.GetAttributes());
-            if (!attrData.TryGetAttributeArg(AttributeFQN, out var attrArgs))
-                yield break;
-
-            // We do not care if it passes or fails as 'false' is the default
-            attrArgs.TryGetValue(nameof(EnumAttribute.Flags), out bool flags);
-
-            EnumStructToGenerate tg = new()
-            {
-                Flags = flags,
-                Type = typeSymbol,
-                InstanceFields = instanceFields,
-                EnumMembers = enumMembers,
-                HasToString = hasToString,
-            };
-
-            var sourceCode = new EnumImplSourceCodeGenerator(tg).GetSourceCode();
-            yield return sourceCode;
-        }
+        var sourceCode = new EnumImplSourceCodeGenerator(tg).GetSourceCode();
+        yield return sourceCode;
     }
 }
 
@@ -204,7 +197,7 @@ public sealed class EnumImplSourceCodeGenerator
                 __members = new {{T}}[{{membersLen}}];
                 __memberNames = new string[{{membersLen}}];
                 {{(CBA)(cb => cb.Enumerate(members, static (mb, m, i) => mb
-                            .CodeBlock($"""
+                    .CodeBlock($"""
                                 __members[{i}] = {m};                                    
                                 __memberNames[{i}] = "{m}";
                                 """)))}}
@@ -245,7 +238,7 @@ public sealed class EnumImplSourceCodeGenerator
             {
                 // Check names
                 {{(CBA)(cb => cb.Enumerate(members, (mb, m, i) => mb
-                            .CodeBlock($$"""
+                    .CodeBlock($$"""
                                 if (text.Equals("{{m}}", StringComparison.OrdinalIgnoreCase))
                                 {
                                     {{VarName}} = {{m}};
@@ -341,11 +334,11 @@ public sealed class EnumImplSourceCodeGenerator
                 .BracketBlock(b =>
                 {
                     b.Enumerate(instances, static (cb, field) =>
-                    {
-                        cb.CodeBlock($"this.{field.Name} = {field.Name.ToVariableName()};");
-                    })
-                    // We'll get the next available value
-                    .AppendLine("__value = Interlocked.Increment(ref Incrementer.NextValue);");
+                        {
+                            cb.CodeBlock($"this.{field.Name} = {field.Name.ToVariableName()};");
+                        })
+                        // We'll get the next available value
+                        .AppendLine("__value = Interlocked.Increment(ref Incrementer.NextValue);");
                 });
         }
     }

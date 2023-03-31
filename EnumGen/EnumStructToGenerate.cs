@@ -1,6 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
-
-namespace Jaynums.SourceGen;
+﻿namespace Jay.SourceGen.EnumGen;
 
 public class EnumStructToGenerate
 {
