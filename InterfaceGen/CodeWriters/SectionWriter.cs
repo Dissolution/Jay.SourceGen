@@ -31,3 +31,42 @@ public abstract class SectionWriter : IInterfaceImplementationWriter
         return false;
     }
 }
+
+public interface IMemberImpl
+{
+    bool CanImpl(MemberSig memberSig);
+    void Impl(ImplementationBuilder builder, MemberSig memberSig);
+}
+
+public interface IPropertyImplementer
+{
+    void Write(PropertySig propertySig, CodeBuilder codeBuilder, ImplementationBuilder implBuilder);
+}
+
+public interface IInterfaceImpl
+{
+    bool CanImpl(TypeSig interfaceType);
+    void Impl(ImplementationBuilder builder);
+}
+
+
+public class ImplementationBuilder
+{
+    private readonly List<MemberSig> _members = new();
+
+    public GenerateInfo GenerateInfo {get; }
+
+    public ImplementationBuilder()
+    {
+        
+    }
+
+
+    public bool TryAddMember(MemberSig memberSig)
+    {
+        if (_members.Contains(memberSig)) return false;
+        _members.Add(memberSig);
+        return true;
+    }
+
+}

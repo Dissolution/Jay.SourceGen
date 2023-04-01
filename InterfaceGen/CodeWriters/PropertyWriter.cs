@@ -1,4 +1,9 @@
-﻿using System.ComponentModel;
+﻿using Jay.SourceGen.Coding;
+
+using System.Collections.Immutable;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Xml.Linq;
 
 namespace Jay.SourceGen.InterfaceGen.CodeWriters;
 
@@ -23,7 +28,20 @@ internal sealed class PropertyWriter : SectionWriter
             .OfType<PropertySig>()
             .ToList();
 
-        codeBuilder.LineDelimit(properties, static (cb, p) => p.WriteDeclaration(cb));
+        codeBuilder.LineDelimit(properties, static (cb, p) =>
+        {
+            p.Visibility.DeclareTo(cb);
+            p.Instic.DeclareTo(cb);
+            p.Keywords.DeclareTo(cb);
+            cb.Code($"{p.ReturnType} {p.Name} {{");
+            if (p.HasGet)
+                cb.Append(" get;");
+            if (p.HasInit)
+                cb.Append(" init;");
+            else if (p.HasSet)
+                cb.Append(" set;");
+            cb.Append(" }");
+        });
     }
 
     private static void WriteConstructors(CodeBuilder codeBuilder, GenerateInfo generate)
@@ -61,6 +79,7 @@ public class NotifyPropertyWriter : SectionWriter
     public override IEnumerable<string> GetNeededUsings()
     {
         yield return "System.ComponentModel";
+        yield return "System.Runtime.CompilerServices";
     }
 
     public override bool CanImplement(INamedTypeSymbol interfaceSymbol)
@@ -71,37 +90,124 @@ public class NotifyPropertyWriter : SectionWriter
 
     private static void WriteEvents(CodeBuilder code, GenerateInfo generate)
     {
-        generate.Members.Add(MemberSig.FromImplementation(
-            Visibility.Public,
-            Instic.Instance,
-            MemberKeywords.None,
-            "PropertyChanged",
-                        MemberType.Event,
-
-
         if (generate.HasInterface<INotifyPropertyChanged>())
         {
-            code.CodeBlock($$"""
-                /// <inheritdoc cref="INotifyPropertyChanged"/>
-                public event PropertyChangedEventHandler? PropertyChanged;
-                """);
-            generate.Members.Add(MemberSig.Get)
+            if (generate.Members.Add(MemberSig.FromImplementation(
+                Visibility.Public,
+                Instic.Instance,
+                MemberKeywords.None,
+                "PropertyChanged",
+                MemberType.Event,
+                typeof(PropertyChangingEventHandler),
+                ImmutableArray<ParameterSig>.Empty)))
+            {
+                code.CodeBlock($$"""
+                    /// <inheritdoc cref="INotifyPropertyChanged"/>
+                    public event PropertyChangedEventHandler? PropertyChanged;
+                    """);
+            }
         }
-         if (generate.HasInterface<INotifyPropertyChanging>())
+        if (generate.HasInterface<INotifyPropertyChanging>())
         {
-            code.CodeBlock($$"""
-                /// <inheritdoc cref="INotifyPropertyChanging"/>
-                public event PropertyChangingEventHandler? PropertyChanging;
-                """);
+            if (generate.Members.Add(MemberSig.FromImplementation(
+                Visibility.Public,
+                Instic.Instance,
+                MemberKeywords.None,
+                "PropertyChanging",
+                MemberType.Event,
+                typeof(PropertyChangingEventHandler),
+                ImmutableArray<ParameterSig>.Empty)))
+            {
+                code.CodeBlock($$"""
+                    /// <inheritdoc cref="INotifyPropertyChanging"/>
+                    public event PropertyChangingEventHandler? PropertyChanging;
+                    """);
+            }
         }
+    }
+
+   
+
+
+    private static void WriteFields(CodeBuilder code, GenerateInfo generate)
+    {
+        // Properties
+        var properties = generate.Members.OfType<PropertySig>().ToList();
+        // To backing Fields
+        code.LineDelimit(properties, static (propBuilder, propSig) => propBuilder.Code($"private {propSig.ReturnType} {propSig.FieldName()};"));
     }
 
     private static void WriteProperties(CodeBuilder code, GenerateInfo generate)
     {
+        // Properties
+        var properties = generate.Members.OfType<PropertySig>().ToList();
 
+        code.LineDelimit(properties, (propBuilder, propSig) =>
+        {
+            propBuilder.CodeLine($"public {propSig.ReturnType} {propSig.Name}")
+            .BracketBlock(propBlock =>
+            {
+                var fieldName = propSig.FieldName();
+
+                if (propSig.HasGet)
+                {
+                    propBlock.CodeLine($"get => this.{fieldName};");
+                }
+                if (propSig.HasInit || propSig.HasSet)
+                {
+                    propBlock.CodeLine($"{(propSig.HasInit ? "init" : "set")} => this.SetField<{propSig.ReturnType}>(ref {fieldName}, value);";
+                }
+            });
+        });
     }
+
+
     private static void WriteMethods(CodeBuilder code, GenerateInfo generate)
     {
+        string keywords;
+        if (generate.MemberKeywords.HasFlag(MemberKeywords.Sealed))
+            keywords = "private";
+        else
+            keywords = "protected";
 
+        bool isChanging = generate.HasInterface<INotifyPropertyChanging>();
+        bool isChanged = generate.HasInterface<INotifyPropertyChanged>();
+
+        if (isChanging)
+        {
+            code.CodeBlock($$"""
+                {{keywords}} void OnPropertyChanging([CallerMemberName] string? propertyName = null)
+                {
+                    if (propertyName is not null)
+                    {
+                        this.PropertyChanging?.Invoke(this, new PropertyChangingEventArgs(propertyName));
+                    }
+                }
+                """);
+        }
+        if (isChanged)
+        {
+            code.CodeBlock($$"""
+                {{keywords}} void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+                {
+                    if (propertyName is not null)
+                    {
+                        this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+                    }
+                }
+                """);
+        }
+
+        code.CodeBlock($$"""
+            {{keywords}} bool SetField<T>(ref T field, T newValue, bool force = false, [CallerMemberName] string? propertyName = null)
+            {
+                if (force || !EqualityComparer<T>.Default.Equals(field, newValue))
+                {
+                    {{(isChanging ? "this.OnPropertyChanging(propertyName);" : "")}}
+                    field = newValue;
+                    {{(isChanged ? "this.OnPropertyChanged(propertyName);" : "")}}
+                }
+            }
+            """);
     }
 }

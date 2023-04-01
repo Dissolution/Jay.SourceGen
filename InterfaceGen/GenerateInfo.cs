@@ -40,8 +40,8 @@ public sealed class GenerateInfo
         Visibility visibility,
         MemberType memberType,
         string? name = null,
-        Func<ITypeSymbol, bool>? returnType = null,
-        Func<ImmutableArray<IParameterSymbol>, bool>? paramTypes = null)
+        Func<TypeSig, bool>? returnType = null,
+        Func<ImmutableArray<ParameterSig>, bool>? paramTypes = null)
     {
         foreach (var member in Members)
         {
