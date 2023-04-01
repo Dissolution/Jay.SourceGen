@@ -1,10 +1,13 @@
-﻿using Jay.SourceGen.Text;
-
-namespace Jay.SourceGen.InterfaceGen.CodeWriters;
+﻿namespace Jay.SourceGen.InterfaceGen.CodeWriters;
 
 public abstract class SectionWriter : IInterfaceImplementationWriter
 {
     private readonly Dictionary<(Instic, Visibility, MemberType), CBA<GenerateInfo>> _sectionActions = new();
+
+    public virtual IEnumerable<string> GetNeededUsings()
+    {
+        yield break;
+    }
 
     protected SectionWriter()
     {

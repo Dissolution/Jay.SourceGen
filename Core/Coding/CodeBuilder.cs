@@ -1,34 +1,41 @@
-﻿using System;
+﻿using Jay.SourceGen.Text;
+
 using System.Runtime.CompilerServices;
 using System.Text;
 
 
-namespace Jay.SourceGen.Text;
+namespace Jay.SourceGen.Coding;
+
+partial class CodeBuilder
+{
+    /// <summary>
+    /// The default <see cref="string"/> written for all <c>NewLine</c> operations <br/>
+    /// <c>= "\r\n" [return + line feed]</c>
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Environment.NewLine"/> cannot be used with Source Generators, as it may be different on various compilation platforms. <br/>
+    /// <c>'\n'</c> is recommended for compatability with Linux and git <br/>
+    /// I've chosen to use <c>"\r\n"</c> (from Windows) as the default as I'm using Windows <br/>
+    /// TODO: Discuss this?
+    /// </remarks>
+    public static string DefaultNewLine { get; set; } = "\r\n";
+
+    /// <summary>
+    /// The default indent used for all <c>Indent</c> operations <br/>
+    /// <c>= "    " [4 spaces]</c>
+    /// </summary>
+    /// <remarks>
+    /// spaces &gt; tabs
+    /// </remarks>
+    public static string DefaultIndent { get; set; } = "    ";
+}
 
 
 /// <summary>
 /// A stack-based fluent text builder
 /// </summary>
-public sealed class CodeBuilder : IDisposable
+public sealed partial class CodeBuilder : IDisposable
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <remarks>
-    /// <see cref="Environment.NewLine"/> is not allowed to be used for Source Generators, as it may change on different compilation platforms. <br/>
-    /// <c>'\n'</c> is recommended for compatability with Linux and git <br/>
-    /// I've chosen to use <c>"\r\n"</c> (from Windows) as the default as I'm a M$ fanboy
-    /// </remarks>
-    public static string DefaultNewLine { get; set; } = "\r\n";
-
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <remarks>
-    /// spaces > tabs
-    /// </remarks>
-    public static string DefaultIndent { get; set; } = "    ";
-
     /// <summary>
     /// Rented <see cref="char"/><c>[]</c> from pool
     /// </summary>
@@ -46,7 +53,7 @@ public sealed class CodeBuilder : IDisposable
     private string _newLineIndent;
 
     /// <summary>
-    /// Gets the <see cref="System.Span{T}">Span&lt;char&gt;</see> that has been written
+    /// Gets the <see cref="Span{T}">Span&lt;char&gt;</see> that has been written
     /// </summary>
     public Span<char> Written
     {
@@ -55,7 +62,7 @@ public sealed class CodeBuilder : IDisposable
     }
 
     /// <summary>
-    /// Gets the <see cref="System.Span{T}">Span&lt;char&gt;</see> available for writing
+    /// Gets the <see cref="Span{T}">Span&lt;char&gt;</see> available for writing
     /// <br/>
     /// <b>Caution</b>: If you write to <see cref="Available"/>, you must also update <see cref="Length"/>!
     /// </summary>
@@ -124,7 +131,7 @@ public sealed class CodeBuilder : IDisposable
         get
         {
             var written = Written;
-            var finalNWIndex = written.LastIndexOf<char>(DefaultNewLine.AsSpan());
+            var finalNWIndex = written.LastIndexOf(DefaultNewLine.AsSpan());
             if (finalNWIndex == -1)
                 return written;
             return written.Slice(finalNWIndex);
@@ -404,7 +411,7 @@ public sealed class CodeBuilder : IDisposable
             object? arg = args[index];
 
             // Append this arg, allows for overridden behavior
-            this.Value<object?>(arg, itemFormat);
+            Value(arg, itemFormat);
 
             // Continue parsing the rest of the format string.
         }
@@ -459,7 +466,7 @@ public sealed class CodeBuilder : IDisposable
     internal CodeBuilder IndentAwareAppend(CBA codeBuilderAction)
     {
         var oldIndent = _newLineIndent;
-        var currentIndent = this.CurrentLine.ToString();
+        var currentIndent = CurrentLine.ToString();
         _newLineIndent = currentIndent;
         codeBuilderAction(this);
         _newLineIndent = oldIndent;
@@ -493,10 +500,10 @@ public sealed class CodeBuilder : IDisposable
             case IEnumerable enumerable:
             {
                 format ??= ",";
-                return this.Delimit(
+                return Delimit(
                     format,
                     enumerable.Cast<object?>(),
-                    (w, v) => w.Value<object?>(v, default, provider)
+                    (w, v) => w.Value(v, default, provider)
                 );
             }
             case Delegate del:
@@ -695,7 +702,7 @@ public sealed class CodeBuilder : IDisposable
 
     #endregion
 
-    #region Enumeration
+    #region Enumerate
     public CodeBuilder Enumerate<T>(
        IEnumerable<T>? values,
        CBIA<T>? perValueAction)
@@ -728,12 +735,18 @@ public sealed class CodeBuilder : IDisposable
         return this;
     }
 
+
+    public CodeBuilder EnumerateAppend<T>(IEnumerable<T>? values) => Enumerate(values, static (cb, v) => cb.Value(v));
+    #endregion
+
+    #region Delimit
+
     public CodeBuilder Delimit<T>(
         CBA? delimitAction,
         IEnumerable<T>? values,
         CBIA<T>? perValueAction)
     {
-        if (values is null || (delimitAction is null && perValueAction is null)) return this;
+        if (values is null || delimitAction is null && perValueAction is null) return this;
         using var e = values.GetEnumerator();
         int index = 0;
         if (!e.MoveNext()) return this;
@@ -752,7 +765,7 @@ public sealed class CodeBuilder : IDisposable
         IEnumerable<T>? values,
         CBA<T>? perValueAction)
     {
-        if (values is null || (delimitAction is null && perValueAction is null)) return this;
+        if (values is null || delimitAction is null && perValueAction is null) return this;
         using var e = values.GetEnumerator();
         if (!e.MoveNext()) return this;
         perValueAction?.Invoke(this, e.Current);
@@ -765,25 +778,47 @@ public sealed class CodeBuilder : IDisposable
     }
 
     public CodeBuilder Delimit<T>(
-       string delimiter,
+       string? delimiter,
        IEnumerable<T>? values,
        CBA<T>? perValueAction)
     {
         if (string.IsNullOrEmpty(delimiter))
-            return Enumerate<T>(values, perValueAction);
-        return Delimit<T>(b => b.Code(delimiter), values, perValueAction);
+            return Enumerate(values, perValueAction);
+        return Delimit(b => b.Code(delimiter), values, perValueAction);
     }
 
-     public CodeBuilder DelimitAppend<T>(
-       string delimiter,
-       IEnumerable<T>? values)
+
+    //public CodeBuilder WrapDelimit<T>(string? delimiter, IEnumerable<T>? values, CBA<T>? perValueAction)
+    //{
+    //    CBA delimitAction = b => b.Code(delimiter);
+    //    List<CBA> actions = new();
+    //    using 
+    //}
+
+
+    public CodeBuilder DelimitAppend<T>(CBA? delimitAction, IEnumerable<T>? values)
     {
-        return Delimit<T>(delimiter, values, static (b,v) => b.Value<T>(v));
+        return Delimit(delimitAction, values, static (b, v) => b.Value(v));
+    }
+
+    public CodeBuilder DelimitAppend<T>(string? delimiter, IEnumerable<T>? values)
+    {
+        return Delimit(delimiter, values, static (b, v) => b.Value(v));
+    }
+
+    public CodeBuilder LineDelimit<T>(IEnumerable<T>? values, CBA<T>? delimitedValueAction)
+    {
+        return Delimit(static b => b.NewLine(), values, delimitedValueAction);
+    }
+
+    public CodeBuilder LineDelimitAppend<T>(IEnumerable<T>? values)
+    {
+        return Delimit(static b => b.NewLine(), values, static (cb, v) => cb.Value(v));
     }
     #endregion
 
     public CodeBuilder IndentBlock(CBA indentBlock)
-    { 
+    {
         return IndentBlock(DefaultIndent, indentBlock);
     }
 
@@ -791,7 +826,7 @@ public sealed class CodeBuilder : IDisposable
     {
         var oldIndent = _newLineIndent;
         // We might be on a new line, but not yet indented
-        if (TextHelper.Equals(this.CurrentLine, oldIndent))
+        if (TextHelper.Equals(CurrentLine, oldIndent))
         {
             Append(indent);
         }
@@ -820,9 +855,9 @@ public sealed class CodeBuilder : IDisposable
 
     public CodeBuilder BracketBlock(CBA bracketBlock, string? indent = null)
     {
-        indent ??= "    ";
+        indent ??= DefaultIndent;
         // Trim all trailing whitespace
-        return this.TrimEnd()
+        return TrimEnd()
             // Start a new line
             .NewLine()
             // Starting bracket
@@ -841,19 +876,19 @@ public sealed class CodeBuilder : IDisposable
         CBA directiveBlock,
         string? endDirective = null)
     {
-        this.Append('#').Append(directiveName);
+        Append('#').Append(directiveName);
         if (!string.IsNullOrEmpty(directiveValue))
         {
-            this.Append(' ').Append(directiveValue);
+            Append(' ').Append(directiveValue);
         }
-        this.NewLine();
+        NewLine();
         directiveBlock(this);
-        this.EnsureOnStartOfNewLine();
+        EnsureOnStartOfNewLine();
         if (endDirective is null)
         {
             endDirective = $"#end{directiveName}";
         }
-        return this.AppendLine(endDirective);
+        return AppendLine(endDirective);
     }
 
 
@@ -865,21 +900,21 @@ public sealed class CodeBuilder : IDisposable
     {
         if (comment is null)
         {
-            return this.AppendLine("// <auto-generated/>");
+            return AppendLine("// <auto-generated/>");
         }
 
-        this.AppendLine("// <auto-generated>");
+        AppendLine("// <auto-generated>");
         foreach (var line in comment.TextSplit(DefaultNewLine))
         {
-            this.Append("// ").AppendLine(line);
+            Append("// ").AppendLine(line);
         }
-        this.AppendLine("// </auto-generated>");
+        AppendLine("// </auto-generated>");
         return this;
     }
 
     public CodeBuilder Nullable(bool enable = true)
     {
-        return this.Append("#nullable ")
+        return Append("#nullable ")
             .Append(enable ? "enable" : "disable")
             .NewLine();
     }
@@ -897,7 +932,7 @@ public sealed class CodeBuilder : IDisposable
             .TrimEnd(';');
         if (ns.Length > 0)
         {
-            return this.Append("using ").Append(ns).AppendLine(';');
+            return Append("using ").Append(ns).AppendLine(';');
         }
         return this;
     }
@@ -921,7 +956,7 @@ public sealed class CodeBuilder : IDisposable
         {
             return this;
         }
-        return this.Append("namespace ").Append(ns).AppendLine(';').NewLine();
+        return Append("namespace ").Append(ns).AppendLine(';').NewLine();
     }
 
     public CodeBuilder Namespace(string nameSpace,
@@ -932,7 +967,7 @@ public sealed class CodeBuilder : IDisposable
         {
             throw new ArgumentException("Invalid namespace", nameof(nameSpace));
         }
-        return this.Append("namespace ").AppendLine(ns).BracketBlock(namespaceBlock).NewLine();
+        return Append("namespace ").AppendLine(ns).BracketBlock(namespaceBlock).NewLine();
     }
 
 
@@ -949,23 +984,23 @@ public sealed class CodeBuilder : IDisposable
         if (!comments.MoveNext())
         {
             // Null or empty comment is blank
-            return this.AppendLine("// ");
+            return AppendLine("// ");
         }
         var cmnt = comments.CharSpan;
         if (!comments.MoveNext())
         {
             // Only a single comment
-            return this.Append("// ").AppendLine(cmnt);
+            return Append("// ").AppendLine(cmnt);
         }
 
         // Multiple comments
-        this.Append("/* ").AppendLine(cmnt);
-        this.Append(" * ").AppendLine(comments.CharSpan);
+        Append("/* ").AppendLine(cmnt);
+        Append(" * ").AppendLine(comments.CharSpan);
         while (comments.MoveNext())
         {
-            this.Append(" * ").AppendLine(comments.CharSpan);
+            Append(" * ").AppendLine(comments.CharSpan);
         }
-        return this.AppendLine(" */");
+        return AppendLine(" */");
     }
 
     public CodeBuilder Comment(string? comment, CommentType commentType)
@@ -1121,8 +1156,8 @@ public sealed class CodeBuilder : IDisposable
     public string ToStringAndDispose()
     {
         // Get our string
-        string str = this.ToString();
-        this.Dispose();
+        string str = ToString();
+        Dispose();
         // return the string
         return str;
     }
@@ -1130,7 +1165,7 @@ public sealed class CodeBuilder : IDisposable
     public string ToStringAndClear()
     {
         // Get our string
-        string str = this.ToString();
+        string str = ToString();
         Length = 0;
         return str;
     }

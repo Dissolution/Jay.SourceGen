@@ -1,6 +1,4 @@
-﻿using Microsoft.CodeAnalysis.CSharp;
-
-namespace Jay.SourceGen;
+﻿namespace Jay.SourceGen;
 
 public class MemberSymbolInfo
 {

@@ -1,6 +1,5 @@
-﻿using Microsoft.CodeAnalysis.CSharp;
+﻿using System.Runtime.CompilerServices;
 
-using System.Runtime.CompilerServices;
 using static InlineIL.IL;
 
 // ReSharper disable InvokeAsExtensionMethod

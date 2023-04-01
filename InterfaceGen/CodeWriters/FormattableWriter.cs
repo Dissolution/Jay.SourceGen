@@ -1,7 +1,4 @@
-﻿using Jay.SourceGen.Extensions;
-using Jay.SourceGen.Text;
-
-namespace Jay.SourceGen.InterfaceGen.CodeWriters;
+﻿namespace Jay.SourceGen.InterfaceGen.CodeWriters;
 
 public sealed class FormattableWriter : SectionWriter
 {

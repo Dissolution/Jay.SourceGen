@@ -3,9 +3,10 @@
 namespace Jay.SourceGen.ConsoleApp;
 
 [Implement]
-public interface IEntity : IFormattable
+public interface IEntity : IEquatable<IEntity>, IComparable<IEntity>//, IFormattable
 {
-
+    [Key]
+    int Id { get; init; }
 }
 
 //[Implement]

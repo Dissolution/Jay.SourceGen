@@ -1,13 +1,7 @@
 ﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Jay.SourceGen.Extensions;
+
 using System.Collections.Immutable;
 using System.Diagnostics;
-using System.Linq.Expressions;
-using System.Reflection;
-using Jay.SourceGen.Text;
-using Jay.SourceGen.Enums;
-using System.Runtime.InteropServices.ComTypes;
-using Jay.SourceGen.InterfaceGen.CodeWriters;
 
 namespace Jay.SourceGen.InterfaceGen;
 
@@ -85,18 +79,23 @@ public class InterfaceImplGenerator : IIncrementalGenerator
                 if (attrData is null)
                     continue;
 
-                // Get our Generate Info
-                GenerateInfo generateInfo = new()
+                // Data from the Attribute itself (constructor args + properties)
+                var args = attrData.GetArgs();
+
+                string? implementationName;
+                if (!args.TryGetValue<string>(nameof(ImplementAttribute.Name), out implementationName) ||
+                    string.IsNullOrWhiteSpace(implementationName))
                 {
-                    TypeSymbol = typeSymbol
+                    implementationName = typeSymbol.Name[1..];
+                }
+
+                // Create our Generate Info
+                GenerateInfo generateInfo = new(typeSymbol)
+                {
+                    ImplementationTypeName = implementationName!,
                 };
 
-                // Data from the Attribute itself
-                var args = attrData.GetArgs();
-                if (args.TryGetValue<string>(nameof(ImplementAttribute.Name), out string? implementationName))
-                {
-                    generateInfo.Name = implementationName;
-                }
+
                 if (args.TryGetValue<bool>(nameof(ImplementAttribute.IsClass), out var isClass))
                 {
                     generateInfo.ObjType = isClass ? ObjType.Class : ObjType.Struct;
@@ -140,61 +139,11 @@ public class InterfaceImplGenerator : IIncrementalGenerator
 
                 // Let's see what the interface declared
                 var members = typeSymbol.GetMembers();
-                foreach (var member in members)
-                {
-                    string name = member.Name;
-                    ImmutableArray<AttributeData> attributes = member.GetAttributes();
-                    Instic instic = member.IsStatic ? Instic.Static : Instic.Instance;
-                    Visibility visibility = Visibility.Public; // HACK/TODO/FIXME
-                    MemberType type;
-                    ITypeSymbol returnType;
-                    ImmutableArray<IParameterSymbol> paramTypes;
+                foreach (ISymbol member in members)
+                {                   
+                    MemberSig memberSig = MemberSig.FromSymbol(member);
 
-                    if (member is IFieldSymbol fieldSymbol)
-                    {
-                        type = MemberType.Field;
-                        returnType = fieldSymbol.Type;
-                        paramTypes = ImmutableArray<IParameterSymbol>.Empty;
-                    }
-                    else if (member is IPropertySymbol propertySymbol)
-                    {
-                        type = MemberType.Property;
-                        returnType = propertySymbol.Type;
-                        paramTypes = propertySymbol.Parameters;
-                    }
-                    else if (member is IEventSymbol eventSymbol)
-                    {
-                        type = MemberType.Event;
-                        var thing = eventSymbol.Type;
-                        Debugger.Break();
-                        throw new NotImplementedException();
-                    }
-                    else if (member is IMethodSymbol methodSymbol)
-                    {
-                        switch (methodSymbol.MethodKind)
-                        {
-                            case MethodKind.Constructor:
-                            case MethodKind.StaticConstructor:
-                            {
-                                type = MemberType.Constructor;
-                                break;
-                            }
-                            default:
-                            {
-                                type = MemberType.Method;
-                                break;
-                            }
-                        }
-                        returnType = methodSymbol.ReturnType;
-                        paramTypes = methodSymbol.Parameters;
-                    }
-                    else
-                    {
-                        Debugger.Break();
-                        throw new NotImplementedException();
-                    }
-
-                    generateInfo.Members.Add(new(instic, visibility, type, attributes, name, returnType, paramTypes));
+                    generateInfo.Members.Add(memberSig);
                 }
 
 
@@ -212,13 +161,12 @@ public class InterfaceImplGenerator : IIncrementalGenerator
 
     private IEnumerable<SourceCode> ProcessType(GenerateInfo generateInfo)
     {
-        if (string.IsNullOrWhiteSpace(generateInfo.Name))
-        {
-            generateInfo.Name = generateInfo.TypeSymbol.Name.Substring(1);
-        }
-
         // Check the interfaces
-        List<IInterfaceImplementationWriter> implWriters = new();
+        List<IInterfaceImplementationWriter> implWriters = new()
+        {
+            // Always start with Property implementer
+            new PropertyWriter(),
+        };
 
         var interfaceSymbols = generateInfo.Interfaces;
         if (!interfaceSymbols.IsDefaultOrEmpty)
@@ -232,7 +180,7 @@ public class InterfaceImplGenerator : IIncrementalGenerator
             }
         }
 
-        // Always add a possible ToString()
+        // Always end with default ToString()
         implWriters.Add(new ToStringImplWriter());
 
         using var codeBuilder = new CodeBuilder()
@@ -240,17 +188,17 @@ public class InterfaceImplGenerator : IIncrementalGenerator
             .Nullable(true)
             // Usings?
             .NewLine()
-            .Namespace(generateInfo.TypeSymbol.GetFQNamespace())
+            .Namespace(generateInfo.InterfaceTypeSymbol.GetFQNamespace())
             // Implementation declaration
             .Enumerate(generateInfo.Visibility.GetFlags(), (cb, flag) => cb.Append(flag.ToString().ToLower()).Append(' '))
             .Enumerate(generateInfo.MemberKeywords.GetFlags(), (cb, flag) => cb.Append(flag.ToString().ToLower()).Append(' '))
-            .Append(generateInfo.ObjType.ToString().ToLower()).Append(' ').Append(generateInfo.Name)
+            .Append(generateInfo.ObjType.ToString().ToLower()).Append(' ').Append(generateInfo.ImplementationTypeName)
             // Interfaces
             .AppendLine(" : ")
             .IndentBlock(ib =>
             {
                 // The main interface, always
-                ib.Value(generateInfo.TypeSymbol);
+                ib.Value(generateInfo.InterfaceTypeSymbol);
                 // Do we have others?
                 if (!interfaceSymbols.IsDefaultOrEmpty)
                 {
@@ -272,9 +220,10 @@ public class InterfaceImplGenerator : IIncrementalGenerator
                                     typeBlock.NewLines(2);
                                 }
                             }
-            });
+            })
+            .TrimEnd();
 
-        string filename = $"{generateInfo.TypeSymbol.GetFQN()}.g.cs";
+        string filename = $"{generateInfo.InterfaceTypeSymbol.GetFQN()}.g.cs";
         string code = codeBuilder.ToString();
 
         Debugger.Break();

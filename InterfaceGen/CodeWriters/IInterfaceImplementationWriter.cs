@@ -1,10 +1,10 @@
-﻿using Jay.SourceGen.Text;
-
-namespace Jay.SourceGen.InterfaceGen.CodeWriters;
+﻿namespace Jay.SourceGen.InterfaceGen.CodeWriters;
 
 public interface IInterfaceImplementationWriter
 {
     bool CanImplement(INamedTypeSymbol interfaceSymbol);
+
+    IEnumerable<string> GetNeededUsings();
 
     bool WriteImplementationSection(
         Instic instic,

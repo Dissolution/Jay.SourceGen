@@ -1,4 +1,6 @@
-﻿namespace Jay.SourceGen.Text;
+﻿using Jay.SourceGen.Coding;
+
+namespace Jay.SourceGen.Text;
 
 /// <summary>
 /// <b>C</b>ode <b>B</b>uilder <b>A</b>ction <br/>

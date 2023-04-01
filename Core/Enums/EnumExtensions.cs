@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Jay.SourceGen.Enums;
+﻿namespace Jay.SourceGen.Enums;
 
 public static class EnumInfo<TEnum>
     where TEnum : struct, Enum

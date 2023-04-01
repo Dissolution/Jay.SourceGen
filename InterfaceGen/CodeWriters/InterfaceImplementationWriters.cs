@@ -9,6 +9,8 @@ public static class InterfaceImplementationWriters
         _writers = new()
         {
             new FormattableWriter(),
+            new EquatableWriter(),
+            new ComparableWriter(),
         };
     }
 

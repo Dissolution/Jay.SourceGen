@@ -1,10 +1,11 @@
-﻿using Jay.SourceGen.InterfaceGen.Attributes;
-using Jay.SourceGen.InterfaceGen;
-using Jay.SourceGen.ConsoleApp;
+﻿using Jay.SourceGen.ConsoleApp;
 
-var entity = new Entity();
+var entity = new Entity(4);
 
 string? str = entity.ToString();
+
+bool eqN = entity.Equals(new Entity(5));
+bool eqY = entity.Equals(new Entity(4));
 
 
 Console.WriteLine("Press [Enter] to close.");

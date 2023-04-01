@@ -1,21 +1,38 @@
 ﻿using System.Collections.Immutable;
-using System.Reflection;
 
 namespace Jay.SourceGen.InterfaceGen;
 
 public sealed class GenerateInfo
 {
-    public string? Name { get; set; } = null;
+    public INamedTypeSymbol InterfaceTypeSymbol { get; }
+    
+    public required string ImplementationTypeName { get; init; }
+
+
     public Visibility Visibility { get; set; } = Visibility.Public;
     public ObjType ObjType { get; set; } = ObjType.Class;
     public MemberKeywords MemberKeywords { get; set; } = MemberKeywords.Sealed;
-    public INamedTypeSymbol TypeSymbol { get; set; }
+
     public ImmutableArray<INamedTypeSymbol> Interfaces { get; set; }
-    public List<MemberSig> Members { get; } = new();
+    public HashSet<MemberSig> Members { get; } = new();
 
-    public GenerateInfo()
+    public GenerateInfo(INamedTypeSymbol interfaceTypeSymbol)
     {
+        this.InterfaceTypeSymbol = interfaceTypeSymbol;
+    }
 
+    public void GetLocals(
+        out string implementationTypeName, 
+        out string implementationVariableName)
+    {
+        implementationTypeName = this.ImplementationTypeName;
+        implementationVariableName = this.ImplementationTypeName.ToVariableName();
+    }
+
+    public bool HasInterface<TInterface>()
+        where TInterface : class
+    {
+        return this.Interfaces.Any(isym => isym.GetFQN() == typeof(TInterface).FullName);
     }
 
     public bool HasMember(
@@ -30,7 +47,7 @@ public sealed class GenerateInfo
         {
             if (!member.Instic.HasFlag(instic)) continue;
             if (!member.Visibility.HasFlag(visibility)) continue;
-            if (!member.Type.HasFlag(memberType)) continue;
+            if (!member.MemberType.HasFlag(memberType)) continue;
             if (!string.IsNullOrWhiteSpace(name))
             {
                 if (!string.Equals(name, member.Name))
@@ -47,5 +64,10 @@ public sealed class GenerateInfo
             return true;
         }
         return false;
+    }
+
+    public IEnumerable<MemberSig> MembersWithAttribute(string attributeFQN)
+    {
+        return this.Members.Where(m => m.Attributes.Any(attr => attr.AttributeClass?.GetFQN() == attributeFQN));
     }
 }

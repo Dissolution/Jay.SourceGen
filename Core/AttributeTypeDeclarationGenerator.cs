@@ -1,9 +1,6 @@
-﻿using Jay.SourceGen.Text;
-
-using Microsoft.CodeAnalysis.CSharp;
+﻿using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
-using System.Diagnostics;
 using System.Text;
 
 namespace Jay.SourceGen;

@@ -10,3 +10,13 @@ public enum Visibility
 
     Any = Private | Protected | Internal | Public,
 }
+
+internal static class VisibilityExtensions
+{
+    public static void DeclareTo(this Visibility visibility, CodeBuilder codeBuilder)
+    {
+        codeBuilder.Enumerate(
+            visibility.GetFlags(),
+            static (cb, v) => cb.Append(v.ToString().ToLower()).Append(' '));
+    }
+}

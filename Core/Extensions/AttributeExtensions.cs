@@ -7,6 +7,11 @@ public static class AttributeExtensions
         return new AttributeArgsCollection(attributeData);
     }
 
+    public static string? GetFullTypeName(this AttributeData attributeData)
+    {
+        return attributeData.AttributeClass?.GetFQN();
+    }
+
     public static IReadOnlyList<AttributeData> GetAttributes(this AttributeListSyntax attributes, Compilation compilation)
     {
         // Collect pertinent syntax trees from these attributes

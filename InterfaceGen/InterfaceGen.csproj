@@ -79,7 +79,12 @@
     </ItemGroup>-->
 
     <ItemGroup>
+        <Using Include="Jay.SourceGen.Coding" />
+        <Using Include="Jay.SourceGen.Enums" />
+        <Using Include="Jay.SourceGen.Extensions" />
         <Using Include="Jay.SourceGen.InterfaceGen.Attributes" />
+        <Using Include="Jay.SourceGen.InterfaceGen.CodeWriters" />
+        <Using Include="Jay.SourceGen.Text" />
         <Using Include="Microsoft.CodeAnalysis" />
     </ItemGroup>
 </Project>

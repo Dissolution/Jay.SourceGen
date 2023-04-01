@@ -1,7 +1,5 @@
-﻿using Jay.SourceGen.Extensions;
-using Jay.SourceGen.Text;
+﻿namespace Jay.SourceGen.InterfaceGen.CodeWriters;
 
-namespace Jay.SourceGen.InterfaceGen.CodeWriters;
 
 internal sealed class ToStringImplWriter : SectionWriter
 {
@@ -13,7 +11,22 @@ internal sealed class ToStringImplWriter : SectionWriter
 
     public override bool CanImplement(INamedTypeSymbol interfaceSymbol)
     {
-        return true;
+        return false; // only manually added
+    }
+
+    private static IReadOnlyList<MemberSig> GetDisplayProperties(GenerateInfo generate)
+    {
+        // Filter only properties
+        var properties = generate.Members.Where(m => m.MemberType == MemberType.Property).ToList();
+
+        // Check for [Display]
+        var displays = properties.Where(p => p.HasAttribute(Code.DisplayAttributeFQN)).ToList();
+        // if there are none, just use properties
+        if (displays.Count == 0)
+        {
+            return properties;
+        }
+        return displays;
     }
 
     private static void WriteInstanceMethods(CodeBuilder codeBuilder, GenerateInfo generate)
@@ -28,30 +41,26 @@ internal sealed class ToStringImplWriter : SectionWriter
         }
 
         // Display members
-        var displayMembers = generate.Members
-            .Where(m => m.Attributes.Any(attr => attr.AttributeClass?.GetFQN() == Code.DisplayAttributeFQN))
-            .ToList();
+        IReadOnlyList<MemberSig> displayMembers = GetDisplayProperties(generate);
 
-        codeBuilder.Append("public")
-            .AppendIf(generate.MemberKeywords.HasFlag(MemberKeywords.Sealed), " ", " virtual ")
-            .Append("string ToString()")
+        codeBuilder.AppendLine("public override string ToString()")
             .BracketBlock(methodBlock =>
             {
                 if (displayMembers.Count == 0)
                 {
-                    methodBlock.CodeLine($"return \"{generate.Name}\";");
+                    methodBlock.CodeLine($"return \"{generate.ImplementationTypeName}\";");
                 }
                 else
                 {
                     methodBlock.AppendLine("return $$\"\"\"")
-                    .IndentBlock("\t", ib =>
+                    .IndentBlock(ib =>
                     {
-                        ib.AppendLine(generate.Name)
+                        ib.AppendLine(generate.ImplementationTypeName)
                         .BracketBlock(nameBlock =>
                         {
                             ib.Delimit(static cb => cb.NewLine(), displayMembers,
-                                (cb, dm) => cb.Append(dm.Name).Append(" = {{").Append(dm.Name).Append("}},"));
-                        })
+                                (cb, dm) => cb.Append(dm.Name).Append(" = {{this.").Append(dm.Name).Append("}},"));
+                        }).NewLine()
                         .Append("\"\"\";");
                     });
                 }

@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Jay.SourceGen.Extensions;
+﻿namespace Jay.SourceGen.Extensions;
 
 public static class SyntaxNodeExtensions
 {

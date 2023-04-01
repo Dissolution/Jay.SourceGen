@@ -48,4 +48,9 @@ public static class TypeSymbolExtensions
         return type.AllInterfaces
             .Any(ti => ti.GetFQN() == interfaceFQN);
     }
+
+    public static bool IsType<T>(this ITypeSymbol typeSymbol)
+    {
+         return string.Equals(GetFQN(typeSymbol), typeof(T).FullName);
+    }
 }
