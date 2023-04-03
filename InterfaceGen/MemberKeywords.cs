@@ -8,6 +8,7 @@ public enum MemberKeywords
     Abstract = 1 << 1,
     Sealed = 1 << 2,
     Partial = 1 << 3,
+    Readonly = 1 << 4,
 }
 
 internal static class MemberKeywordsExtensions

@@ -1,13 +1,10 @@
 ﻿namespace Jay.SourceGen.InterfaceGen.Attributes;
 
-[AttributeUsage(AttributeTargets.Interface, AllowMultiple = false, Inherited = true)]
+[AttributeUsage(AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]
 public class ImplementAttribute : Attribute
 {
-    public string? Name {get;set;} = null;
-    public bool IsClass { get; set; } = true;
-    public bool IsPartial { get; set; } = false;
-    public bool IsAbstract { get; set; } = false;
-    public bool IsSealed { get; set; } = true;
+    public string? Keywords { get; set; } = null;
+    public string? Name { get; set; } = null;
 
     public ImplementAttribute()
     {

@@ -89,11 +89,17 @@ public class InterfaceImplGenerator : IIncrementalGenerator
                     implementationName = typeSymbol.Name[1..];
                 }
 
+                string? keywords = null;
+                args.TryGetValue(nameof(ImplementAttribute.Keywords), out keywords);
+
+
+
                 // Create our Generate Info
                 GenerateInfo generateInfo = new(typeSymbol)
                 {
                     ImplementationTypeName = implementationName!,
                 };
+
 
 
                 if (args.TryGetValue<bool>(nameof(ImplementAttribute.IsClass), out var isClass))
